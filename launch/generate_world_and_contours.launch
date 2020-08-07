@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 
 <launch>
-    <arg name = "occupancy_grid_name" default = "office3" />
+    <arg name = "occupancy_grid_name" default = "grid" />
     <arg name = "contour_file_name" default = "$(arg occupancy_grid_name).dat" />
     <arg name = "gazebo_world_name" default = "$(arg occupancy_grid_name).world" />
         <param name="occupancy_grid_name" type="string" value="$(find octomap_to_gazebo)/maps/$(arg occupancy_grid_name)"/>

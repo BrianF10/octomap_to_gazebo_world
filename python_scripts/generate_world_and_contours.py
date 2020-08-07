@@ -1,102 +1,97 @@
 #!/usr/bin/env python
 
 import rospy
-import cv2
 import yaml
 import os.path
-import matplotlib.pyplot as plt
-from createGazeboWorld import writeSvnHeaders
-from createGazeboWorld import writeContourToWorldFile, closeWorldFile
-from visvalingamWhyatt import VWSimplifier
 import numpy as np
+from createGazeboWorld import writeSvnHeaders
+from createGazeboWorld import writeWallToWorld, closeWorldFile
 
-# def writeContourToDatfile(cnt, scale, f):
-#     f.write("%i \n" % (len(cnt)))
-#     for ii in xrange(len(cnt)):
-#         x = cnt[ii][0][0]  # * scale
-#         y = cnt[ii][0][1]  # * scale
-#         f.write("%f %f \n" % (x, y))
+def get_walls(name) :
+    """input:
+    text file to occupancy grid: 2 dimensional np.array
+    """
+    
+    """ output:
+    list_origin_walls: (list of tuples) : list of origins of walls
+    list_final_walls: (list of tuples) : list of ends of walls
+    """
+    origin = []
+    array = []
+    with open(name) as file:
+        w = int(next(file).strip()) # read first line
+        h = int(next(file).strip())
+        #тут нужно передать и поменять
+        scale = float(next(file).strip())
+        #origin_x, origin_y, origin_z
+        origin_x = float(next(file).strip())
+        origin_y = float(next(file).strip())
+        origin_z = float(next(file).strip())
 
-def writeContourToDatfile(cnt, scale, f):
-    f.write("%i \n" % (len(cnt)))
-    for ii in xrange(len(cnt)):
-        x = cnt[ii][0]  # * scale
-        y = cnt[ii][1]  # * scale
-        f.write("%f %f \n" % (x, y))
+        for line in file:
+            array.append(int(line.strip()))
+    
+    file.close()
+    
+    occupancy_grid = np.zeros((h, w), dtype=np.int8)
+    
+    for i in range(h):
+        for j in range(w):
+            occupancy_grid[i, j] = array[i * w + j]  
+        
+    list_origin_walls = []
+    list_final_walls = []
+    init = False
+    for i in range(occupancy_grid.shape[0]):
+        for j in range(occupancy_grid.shape[1]): 
+            if (occupancy_grid[i, j] == 100 and not init):
+                wall_init = (float(i), float(j))
+                #print("origin: i: ", i,"j:", j)
+                list_origin_walls.append(wall_init)
+                init = True
+            if (init and occupancy_grid[i, j] == 0):
+                wall_final = (float(i), float(j-1))
+                #print("final: i: ", i,"j:", j)
+                list_final_walls.append(wall_final)
+                init = False
+            elif (init and occupancy_grid[i, j] == 100 and j == occupancy_grid.shape[1] - 1):
+                wall_final = (float(i), float(j))
+                #print("final: i: ", i,"j:", j)
+                list_final_walls.append(wall_final)
+                init = False
+    return list_origin_walls, list_final_walls, scale,    
 
-
-def getContourPnts(cnt):
-    pnts = []
-    for ii in xrange(len(cnt)):
-        x = cnt[ii][0][0]  # * scale
-        y = cnt[ii][0][1]  # * scale
-        pnts.append([x,y])
-    pnts = np.asarray(pnts, float)
-    return pnts
-
-
-def writeGazeboAndDatFiles(contours, scale, dat_file, gazebo_file):
+def writeGazeboAndDatFiles(list_origin_walls, list_final_walls, scale, gazebo_file):
     writeSvnHeaders(gazebo_file)
     wall_num = 0
-    for i in xrange(len(contours)):
-        # if i == 0:
-        #     continue
-        cnt = contours[i]
-        # minlength = min(epsilon, 0.1*cv2.arcLength(cnt, True))
-        # minlength = 0.01*cv2.arcLength(cnt, True)
-        # apx = cv2.approxPolyDP(cnt, minlength, True)
-        # if (cv2.arcLength(apx, True) < min_perimeter):
-        #     continue
-        pnts = getContourPnts(cnt)
-        simplifier = VWSimplifier(pnts)
-        numpnts = max(15, len(cnt) * 0.5)
-        apx = simplifier.from_number(numpnts)
-        if (len(apx) < 15):
-            continue
-        writeContourToDatfile(apx, scale, dat_file)
-        wall_num = writeContourToWorldFile(apx, scale, gazebo_file, wall_num)
+    wall_num = writeWallToWorld(list_origin_walls, list_final_walls, scale, gazebo_file, wall_num)
+    #print("type(wall_num): ", type(wall_num))
+    #print("wall_num", wall_num)
 
 
-# todo: Make this take a .yaml file as an argument.
-# Improve documentation
-# pass contours using ros?
-# ignore small contours?
-# add tsp stuff
+
 if __name__ == '__main__':
     occupancy_grid_name = rospy.get_param("occupancy_grid_name")
     occupancy_grid_yaml = occupancy_grid_name + '.yaml'
+    occupancy_grid_txt = occupancy_grid_name + '.txt'
 
-    print occupancy_grid_yaml
+    #print occupancy_grid_yaml
     with open(occupancy_grid_yaml, 'r') as f:
         configs = yaml.load(f)
 
-    scale = configs["resolution"]
+    #scale = configs["resolution"]
     map_name = configs["image"]
     occupancy_grid_file = os.path.dirname(occupancy_grid_yaml) + '/' + map_name
 
-    output_contour_filename = rospy.get_param("contour_file")
+    #output_contour_filename = rospy.get_param("contour_file")
     output_gazebo_filename = rospy.get_param("gazebo_world_file")
 
-    # min_perimeter = 50
-    # epsilon = 4
-    # img = cv2.imread('FloorPlanImages/e5_rescaled2_inverted2.png')
-    img = cv2.imread(occupancy_grid_file)
-    imgray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    ret, thresh = cv2.threshold(imgray, 206, 255, cv2.THRESH_BINARY)
-    contours, hierarchy = cv2.findContours(
-        thresh,
-        cv2.RETR_TREE,
-        cv2.CHAIN_APPROX_SIMPLE
-    )
+    list_origin_walls, list_final_walls, scale = get_walls(occupancy_grid_txt)
 
-    contour_file = open(output_contour_filename, 'w+')
     gazebo_file = open(output_gazebo_filename, 'w+')
 
-    writeGazeboAndDatFiles(contours, scale, contour_file, gazebo_file)
+    writeGazeboAndDatFiles(list_origin_walls, list_final_walls, scale, gazebo_file)
     closeWorldFile(gazebo_file)
-    contour_file.close()
 
 
-cv2.drawContours(thresh, contours, -1, (225, 225, 225), 3);
-plt.imshow(thresh, interpolation="nearest")
-plt.show()
+print("Reading was successful")
