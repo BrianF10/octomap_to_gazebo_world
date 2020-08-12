@@ -32,6 +32,10 @@ def get_walls(name) :
             array.append(int(line.strip()))
     
     file.close()
+
+    origin.append(origin_x)
+    origin.append(origin_y)
+    origin.append(origin_z)
     
     occupancy_grid = np.zeros((h, w), dtype=np.int8)
     
@@ -59,12 +63,12 @@ def get_walls(name) :
                 #print("final: i: ", i,"j:", j)
                 list_final_walls.append(wall_final)
                 init = False
-    return list_origin_walls, list_final_walls, scale,    
+    return list_origin_walls, list_final_walls, scale, origin    
 
-def writeGazeboAndDatFiles(list_origin_walls, list_final_walls, scale, gazebo_file):
+def writeGazeboAndDatFiles(list_origin_walls, list_final_walls, origin, scale, gazebo_file):
     writeSvnHeaders(gazebo_file)
     wall_num = 0
-    wall_num = writeWallToWorld(list_origin_walls, list_final_walls, scale, gazebo_file, wall_num)
+    wall_num = writeWallToWorld(list_origin_walls, list_final_walls, origin, scale, gazebo_file, wall_num)
     #print("type(wall_num): ", type(wall_num))
     #print("wall_num", wall_num)
 
@@ -86,11 +90,11 @@ if __name__ == '__main__':
     #output_contour_filename = rospy.get_param("contour_file")
     output_gazebo_filename = rospy.get_param("gazebo_world_file")
 
-    list_origin_walls, list_final_walls, scale = get_walls(occupancy_grid_txt)
+    list_origin_walls, list_final_walls, scale, origin = get_walls(occupancy_grid_txt)
 
     gazebo_file = open(output_gazebo_filename, 'w+')
 
-    writeGazeboAndDatFiles(list_origin_walls, list_final_walls, scale, gazebo_file)
+    writeGazeboAndDatFiles(list_origin_walls, list_final_walls, origin, scale, gazebo_file)
     closeWorldFile(gazebo_file)
 
 
